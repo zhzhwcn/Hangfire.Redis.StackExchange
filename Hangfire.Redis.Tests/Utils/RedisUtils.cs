@@ -1,5 +1,5 @@
 ﻿using System;
-using StackExchange.Redis;
+using FreeRedis;
 
 namespace Hangfire.Redis.Tests.Utils
 {
@@ -12,40 +12,19 @@ namespace Hangfire.Redis.Tests.Utils
         private const string DefaultHost = "127.0.0.1";
         private const int DefaultPort = 6379;
         private const int DefaultDb = 1;
-        static Lazy<ConnectionMultiplexer> connection = null;
+
 
         static RedisUtils()
         {
-            connection = new Lazy<ConnectionMultiplexer>(() =>
-                {
-                    ConfigurationOptions options = new ConfigurationOptions
-                    {
-                        AllowAdmin = true,
-                        SyncTimeout = 15000,
-                        ConnectRetry = 5
-                    };
-                    options.EndPoints.Add(GetHostAndPort());
-                    return ConnectionMultiplexer.Connect(options);
-				}
-			);
-		}
-        public static IServer GetFirstServer()
-        {
-            return connection.Value.GetServer(connection.Value.GetEndPoints()[0]);
-        }
-        public static IDatabase CreateClient()
-        {
-            return connection.Value.GetDatabase(DefaultDb);
-        }
+            RedisClient =
+                new RedisClient(GetHostAndPort());
 
-        public static ISubscriber CreateSubscriber()
-        {
-            return connection.Value.GetSubscriber();
         }
+        public static RedisClient RedisClient { get; }
 
         public static string GetHostAndPort()
         {
-            return String.Format("{0}:{1}", GetHost(), GetPort());
+            return $"{GetHost()}:{GetPort()},defaultDatabase={GetDb()},connectTimeout=30000,poolsize=100";
         }
 
         public static string GetHost()

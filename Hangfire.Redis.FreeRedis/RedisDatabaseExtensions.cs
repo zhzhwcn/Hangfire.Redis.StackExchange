@@ -17,51 +17,33 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using StackExchange.Redis;
+using FreeRedis;
 
 namespace Hangfire.Redis.StackExchange
 {
     public static class RedisDatabaseExtensions
 	{
-		public static HashEntry[] ToHashEntries(this IEnumerable<KeyValuePair<string, string>> keyValuePairs)
-		{
-			var hashEntry = new HashEntry[keyValuePairs.Count()];
-			int i = 0;
-			foreach (var kvp in keyValuePairs)
-			{
-				hashEntry[i] = new HashEntry(kvp.Key, kvp.Value);
-				i++;
-			}
-			return hashEntry;
-		}
-
-        public static RedisValue[] ToRedisValues(this IEnumerable<string> values)
+        public static object[] DicToObjectArray(this IEnumerable<KeyValuePair<string, string>> dic)
         {
-            if (values == null)
-                throw new ArgumentNullException(nameof(values));
-
-            return values.Select(x => (RedisValue)x).ToArray();
+            var count = dic.Count();
+            var obj = new object[count * 2];
+            for (var i = 0; i < count; i++)
+            {
+                var ele = dic.ElementAt(i);
+                obj[i * 2] = ele.Key;
+                obj[i * 2 + 1] = ele.Value;
+            }
+            return obj;
         }
-		
-		//public static Dictionary<string, string> ToStringDictionary(this HashEntry[] entries)
-		//{
-		//	var dictionary = new Dictionary<string, string>(entries.Length);
-		//	foreach (var entry in entries)
-		//		dictionary[entry.Name] = entry.Value;
-		//	return dictionary;
-		//}
-		
-        public static Dictionary<string, string> GetValuesMap(this IDatabase redis, string[] keys)
+
+        public static Dictionary<string, string> GetValuesMap(this RedisClient redis, string[] keys)
 		{
-			var redisKeyArr = keys.Select(x => (RedisKey)x).ToArray();
-			var valuesArr = redis.StringGet(redisKeyArr);
-			Dictionary<string, string> result = new Dictionary<string, string>(valuesArr.Length);
-			for (int i = 0; i < valuesArr.Length; i++)
-			{
-				result.Add(redisKeyArr[i], valuesArr[i]);
-			}
-			return result;
-		}
+            var valuesArr = redis.MGet(keys);
+            var result = new Dictionary<string, string>(valuesArr.Length);
+            for (var i = 0; i < valuesArr.Length; i++)
+                result.Add(keys[i], valuesArr[i]);
+            return result;
+        }
 
 
     }

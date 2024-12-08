@@ -15,8 +15,8 @@
 // License along with Hangfire.Redis.StackExchange. If not, see <http://www.gnu.org/licenses/>.
 
 using System;
+using FreeRedis;
 using Hangfire.Annotations;
-using StackExchange.Redis;
 
 namespace Hangfire.Redis.StackExchange
 {
@@ -33,12 +33,12 @@ namespace Hangfire.Redis.StackExchange
 
         public static IGlobalConfiguration<RedisStorage> UseRedisStorage(
             [NotNull] this IGlobalConfiguration configuration,
-            [NotNull] IConnectionMultiplexer connectionMultiplexer,
+            [NotNull] RedisClient redisClient,
             RedisStorageOptions options = null)
         {
             if (configuration == null) throw new ArgumentNullException(nameof(configuration));
-            if (connectionMultiplexer == null) throw new ArgumentNullException(nameof(connectionMultiplexer));
-            var storage = new RedisStorage(connectionMultiplexer, options);
+            if (redisClient == null) throw new ArgumentNullException(nameof(redisClient));
+            var storage = new RedisStorage(redisClient, options);
             GlobalJobFilters.Filters.Add(new HangfireSubscriber());
             return configuration.UseStorage(storage);
         }

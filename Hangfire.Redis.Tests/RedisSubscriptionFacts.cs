@@ -1,5 +1,4 @@
 ﻿using Moq;
-using StackExchange.Redis;
 using System;
 using System.Diagnostics;
 using System.Threading;
@@ -14,29 +13,26 @@ namespace Hangfire.Redis.Tests
     {
         private readonly CancellationTokenSource _cts;
         private readonly RedisStorage _storage;
-        private readonly Mock<ISubscriber> _subscriber;
 
         public RedisSubscriptionFacts()
         {
             _cts = new CancellationTokenSource();
 
-            var options = new RedisStorageOptions() { Db = RedisUtils.GetDb() };
-            _storage = new RedisStorage(RedisUtils.GetHostAndPort(), options);
-
-            _subscriber = new Mock<ISubscriber>();
+            var options = new RedisStorageOptions() { };
+            _storage = new RedisStorage(RedisUtils.RedisClient, options);
         }
         
         [Fact]
         public void Ctor_ThrowAnException_WhenStorageIsNull()
         {
             Assert.Throws<ArgumentNullException>("storage",
-                () => new RedisSubscription(null, _subscriber.Object));
+                () => new RedisSubscription(null, RedisUtils.RedisClient));
         }
 
         [Fact]
         public void Ctor_ThrowAnException_WhenSubscriberIsNull()
         {
-            Assert.Throws<ArgumentNullException>("subscriber",
+            Assert.Throws<ArgumentNullException>("redisClient",
                 () => new RedisSubscription(_storage, null));
         }
         [Fact]
@@ -44,7 +40,7 @@ namespace Hangfire.Redis.Tests
         {
             //Arrange
             Stopwatch sw = new Stopwatch();
-            var subscription = new RedisSubscription(_storage, RedisUtils.CreateSubscriber());
+            var subscription = new RedisSubscription(_storage, RedisUtils.RedisClient);
             var timeout = TimeSpan.FromMilliseconds(100);
             sw.Start();
 

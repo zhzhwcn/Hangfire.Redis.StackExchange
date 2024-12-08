@@ -1,6 +1,6 @@
-﻿using StackExchange.Redis;
-using System;
+﻿using System;
 using System.Collections.Generic;
+using FreeRedis;
 using Hangfire.Redis.StackExchange;
 using Hangfire.Redis.Tests.Utils;
 using Xunit;
@@ -14,7 +14,7 @@ namespace Hangfire.Redis.Tests
 
         public RedisConnectionFacts()
         {
-            var options = new RedisStorageOptions() {Db = RedisUtils.GetDb()};
+            var options = new RedisStorageOptions() {};
             _storage = new RedisStorage(RedisUtils.GetHostAndPort(), options);
         }
 
@@ -41,14 +41,14 @@ namespace Hangfire.Redis.Tests
         {
             UseConnections((redis, connection) =>
             {
-                redis.HashSet(
+                redis.HSet(
                     "{hangfire}:job:my-job:state",
                     new Dictionary<string, string>
                     {
                         {"State", "Name"},
                         {"Reason", "Reason"},
                         {"Key", "Value"}
-                    }.ToHashEntries());
+                    });
 
                 var result = connection.GetStateData("my-job");
 
@@ -64,12 +64,12 @@ namespace Hangfire.Redis.Tests
         {
             UseConnections((redis, connection) =>
             {
-                redis.HashSet(
+                redis.HSet(
                     "{hangfire}:job:my-job:state",
                     new Dictionary<string, string>
                     {
                         {"State", "Name"}
-                    }.ToHashEntries());
+                    });
 
                 var result = connection.GetStateData("my-job");
 
@@ -104,8 +104,8 @@ namespace Hangfire.Redis.Tests
             UseConnections((redis, connection) =>
             {
                 // Arrange
-                redis.SortedSetAdd("{hangfire}:some-set", "1", 0);
-                redis.SortedSetAdd("{hangfire}:some-set", "2", 0);
+                redis.ZAdd("{hangfire}:some-set", 0, "1");
+                redis.ZAdd("{hangfire}:some-set", 0, "2");
 
                 // Act
                 var result = connection.GetAllItemsFromSet("some-set");
@@ -148,7 +148,7 @@ namespace Hangfire.Redis.Tests
                     {"Key2", "Value2"}
                 });
 
-                var hash = redis.HashGetAll("{hangfire}:some-hash").ToStringDictionary();
+                var hash = redis.HGetAll("{hangfire}:some-hash");
                 Assert.Equal("Value1", hash["Key1"]);
                 Assert.Equal("Value2", hash["Key2"]);
             });
@@ -177,11 +177,11 @@ namespace Hangfire.Redis.Tests
             UseConnections((redis, connection) =>
             {
                 // Arrange
-                redis.HashSet("{hangfire}:some-hash", new Dictionary<string, string>
+                redis.HSet("{hangfire}:some-hash", new Dictionary<string, string>
                 {
                     {"Key1", "Value1"},
                     {"Key2", "Value2"}
-                }.ToHashEntries());
+                });
 
                 // Act
                 var result = connection.GetAllEntriesFromHash("some-hash");
@@ -220,8 +220,8 @@ namespace Hangfire.Redis.Tests
         {
             UseConnections((redis, connection) =>
             {
-                redis.SortedSetAdd("{hangfire}:some-set", "1", 0);
-                redis.SortedSetAdd("{hangfire}:some-set", "2", 0);
+                redis.ZAdd("{hangfire}:some-set", 0, "1");
+                redis.ZAdd("{hangfire}:some-set", 0, "2");
 
                 var result = connection.GetSetCount("some-set");
 
@@ -234,7 +234,7 @@ namespace Hangfire.Redis.Tests
         {
             UseConnections((redis, connection) =>
             {
-                redis.SortedSetAdd("{hangfire}:some-set", "1", 0);
+                redis.ZAdd("{hangfire}:some-set", 0, "1");
 
                 var result = connection.GetSetContains("some-set", "1");
 
@@ -247,7 +247,7 @@ namespace Hangfire.Redis.Tests
         {
             UseConnections((redis, connection) =>
             {
-                redis.SortedSetAdd("{hangfire}:some-set", "1", 0);
+                redis.ZAdd("{hangfire}:some-set", 0, "1");
 
                 var result = connection.GetSetContains("some-set", "0");
 
@@ -255,12 +255,12 @@ namespace Hangfire.Redis.Tests
             });
         }
 
-        private void UseConnections(Action<IDatabase, RedisConnection> action)
+        private void UseConnections(Action<RedisClient, RedisConnection> action)
         {
-            var redis = RedisUtils.CreateClient();
-            var subscription = new RedisSubscription(_storage, RedisUtils.CreateSubscriber());
-            var server = RedisUtils.GetFirstServer();
-            using (var connection = new RedisConnection(_storage, server, redis, subscription, new RedisStorageOptions().FetchTimeout))
+            var redis = RedisUtils.RedisClient;
+            var subscription = new RedisSubscription(_storage, RedisUtils.RedisClient);
+
+            using (var connection = new RedisConnection(_storage, redis, subscription, new RedisStorageOptions().FetchTimeout))
             {
                 action(redis, connection);
             }
@@ -268,11 +268,11 @@ namespace Hangfire.Redis.Tests
 
         private void UseConnection(Action<RedisConnection> action)
         {
-            var redis = RedisUtils.CreateClient();
-            var subscription = new RedisSubscription(_storage, RedisUtils.CreateSubscriber());
-            var server = RedisUtils.GetFirstServer();
+            var redis = RedisUtils.RedisClient;
+            var subscription = new RedisSubscription(_storage, RedisUtils.RedisClient);
 
-            using (var connection = new RedisConnection(_storage, server, redis, subscription, new RedisStorageOptions().FetchTimeout))
+
+            using (var connection = new RedisConnection(_storage, redis, subscription, new RedisStorageOptions().FetchTimeout))
             {
                 action(connection);
             }

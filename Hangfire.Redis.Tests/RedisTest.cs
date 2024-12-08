@@ -1,5 +1,5 @@
-﻿using Hangfire.Redis.Tests.Utils;
-using StackExchange.Redis;
+﻿using FreeRedis;
+using Hangfire.Redis.Tests.Utils;
 using Xunit;
 
 namespace Hangfire.Redis.Tests
@@ -7,19 +7,19 @@ namespace Hangfire.Redis.Tests
     [Collection("Sequential")]
     public class RedisTest 
     {
-        private readonly IDatabase _redis;
+        private readonly RedisClient _redis;
 
         public RedisTest()
         {
-            _redis = RedisUtils.CreateClient();
+            _redis = RedisUtils.RedisClient;
         }
 
 
         [Fact, CleanRedis]
         public void RedisSampleTest()
         {
-            var defaultValue = _redis.StringGet("samplekey");
-            Assert.True(defaultValue.IsNull);
+            var defaultValue = _redis.Get("samplekey");
+            Assert.True(string.IsNullOrEmpty(defaultValue));
         }
     }
 }

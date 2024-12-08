@@ -7,8 +7,8 @@ namespace Hangfire.Redis.Tests.Utils
     {
         public override void Before(MethodInfo methodUnderTest)
         {
-            var client = RedisUtils.CreateClient();
-            client.Multiplexer.GetServer(RedisUtils.GetHostAndPort()).FlushDatabase(RedisUtils.GetDb());
+            var client = RedisUtils.RedisClient;
+            client.FlushDb();
         }
 
         public override void After(MethodInfo methodUnderTest)

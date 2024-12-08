@@ -18,7 +18,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\Hangfire.Redis.StackExchange\Hangfire.Redis.StackExchange.csproj" />
+        <ProjectReference Include="..\Hangfire.Redis.FreeRedis\Hangfire.Redis.FreeRedis.csproj" />
     </ItemGroup>
 
     <ItemGroup>

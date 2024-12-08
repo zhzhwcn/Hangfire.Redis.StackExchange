@@ -27,7 +27,6 @@ namespace Hangfire.Redis.StackExchange
             InvisibilityTimeout = TimeSpan.FromMinutes(30);
             FetchTimeout = TimeSpan.FromMinutes(3);
             ExpiryCheckInterval = TimeSpan.FromHours(1);
-            Db = 0;
             Prefix = DefaultPrefix;
             SucceededListSize = 499;
             DeletedListSize = 499;
@@ -56,7 +55,6 @@ namespace Hangfire.Redis.StackExchange
         /// </summary>
         public TimeSpan ExpiryCheckInterval { get; set; }
         public string Prefix { get; set; }
-        public int Db { get; set; }
         public int SucceededListSize { get; set; }
         public int DeletedListSize { get; set; }
         public string[] LifoQueues { get; set; }

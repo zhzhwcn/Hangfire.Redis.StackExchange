@@ -5,7 +5,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Hangfire.Logging;
 using Hangfire.Server;
-using StackExchange.Redis;
 
 namespace Hangfire.Redis.StackExchange
 {
@@ -50,7 +49,7 @@ namespace Hangfire.Redis.StackExchange
                 {
                     var redisKey = _storage.GetRedisKey(key);
 
-                    var count = redis.ListLength(redisKey);
+                    var count = redis.LLen(redisKey);
                     if (count == 0) continue;
 
                     Logger.InfoFormat("Removing expired records from the '{0}' list...", key);
@@ -62,18 +61,16 @@ namespace Hangfire.Redis.StackExchange
                     {
                         var first = Math.Max(0, last - batchSize + 1);
 
-                        var jobIds = redis.ListRange(redisKey, first, last).ToStringArray();
+                        var jobIds = redis.LRange(redisKey, first, last);
                         if (jobIds.Length == 0) continue;
 
-                        var pipeline = redis.CreateBatch();
                         var tasks = new Task[jobIds.Length];
 
                         for (var i = 0; i < jobIds.Length; i++)
                         {
-                            tasks[i] = pipeline.KeyExistsAsync(_storage.GetRedisKey($"job:{jobIds[i]}"));
+                            tasks[i] = redis.ExistsAsync(_storage.GetRedisKey($"job:{jobIds[i]}"));
                         }
 
-                        pipeline.Execute();
                         Task.WaitAll(tasks);
 
                         keysToRemove.AddRange(jobIds.Where((t, i) => !((Task<bool>) tasks[i]).Result));

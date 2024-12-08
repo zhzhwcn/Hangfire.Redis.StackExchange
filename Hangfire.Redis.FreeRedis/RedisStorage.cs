@@ -17,13 +17,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using FreeRedis;
 using Hangfire.Annotations;
 using Hangfire.Dashboard;
 using Hangfire.Logging;
 using Hangfire.Server;
 using Hangfire.States;
 using Hangfire.Storage;
-using StackExchange.Redis;
+
 
 namespace Hangfire.Redis.StackExchange
 {
@@ -31,9 +32,8 @@ namespace Hangfire.Redis.StackExchange
     {
         // Make sure in Redis Cluster all transaction are in the same slot !!
         private readonly RedisStorageOptions _options;
-        private readonly IConnectionMultiplexer _connectionMultiplexer;
+        private readonly RedisClient _redisClient;
         private readonly RedisSubscription _subscription;
-        private readonly ConfigurationOptions _redisOptions;
 
         private readonly Dictionary<string, bool> _features =
             new Dictionary<string, bool>(StringComparer.OrdinalIgnoreCase)
@@ -53,40 +53,30 @@ namespace Hangfire.Redis.StackExchange
             };
 
         public RedisStorage()
-            : this("localhost:6379", null, null)
-        {
-        }
-
-        public RedisStorage(IConnectionMultiplexer connectionMultiplexer, RedisStorageOptions options = null)
-            : this("UseConnectionMultiplexer", connectionMultiplexer, options)
+            : this("localhost:6379", null)
         {
         }
 
         public RedisStorage(string connectionString, RedisStorageOptions options = null)
-            : this(connectionString, null, options)
+            : this(new RedisClient(connectionString), options)
         {
         }
 
-        private RedisStorage(string connectionString, IConnectionMultiplexer connectionMultiplexer, 
-            RedisStorageOptions options = null)
+        public RedisStorage(RedisClient redisClient, RedisStorageOptions options = null)
         {
-            if (connectionString == null)
-                throw new ArgumentNullException(nameof(connectionString));
-            if (connectionString == "UseConnectionMultiplexer" && connectionMultiplexer == null)
-                throw new ArgumentNullException(nameof(connectionMultiplexer));
+            if (redisClient == null)
+                throw new ArgumentNullException(nameof(redisClient));
 
-            _connectionMultiplexer = connectionMultiplexer ?? ConnectionMultiplexer.Connect(connectionString);
-
-            _redisOptions = ConfigurationOptions.Parse(_connectionMultiplexer.Configuration);
+            _redisClient = redisClient;
 
             _options = options ?? new RedisStorageOptions
             {
-                Db = _redisOptions.DefaultDatabase ?? 0
+                
             };
 
             SetTransactionalFeatures();
 
-            _subscription = new RedisSubscription(this, _connectionMultiplexer.GetSubscriber());
+            _subscription = new RedisSubscription(this, _redisClient);
         }
 
         private void SetTransactionalFeatures()
@@ -96,15 +86,12 @@ namespace Hangfire.Redis.StackExchange
             _features[JobStorageFeatures.Transaction.RemoveFromQueue(typeof(RedisFetchedJob))] = _options.UseTransactions; 
         }
 
-        public string ConnectionString => _connectionMultiplexer.Configuration;
-
-        public int Db => _options.Db;
         
         internal int SucceededListSize => _options.SucceededListSize;
 
         internal int DeletedListSize => _options.DeletedListSize;
         
-        internal RedisChannel SubscriptionChannel => _subscription.Channel;
+        internal string SubscriptionChannel => _subscription.Channel;
 
         internal string[] LifoQueues => _options.LifoQueues;
 
@@ -112,7 +99,7 @@ namespace Hangfire.Redis.StackExchange
 
         public override IMonitoringApi GetMonitoringApi()
         {
-            return new RedisMonitoringApi(this, _connectionMultiplexer.GetDatabase(Db));
+            return new RedisMonitoringApi(this, _redisClient);
         }
         public override bool HasFeature([NotNull] string featureId)
         {
@@ -125,14 +112,7 @@ namespace Hangfire.Redis.StackExchange
         }
         public override IStorageConnection GetConnection()
         {
-            var endPoints = _connectionMultiplexer.GetEndPoints(false);
-            IServer server = endPoints.Select(endPoint => _connectionMultiplexer.GetServer(endPoint))
-                .FirstOrDefault(s => s.IsConnected && !s.IsReplica);
-
-            if (server == null)
-                throw new RedisConnectionException(ConnectionFailureType.UnableToConnect, "No redis server available");
-                
-            return new RedisConnection(this, server, _connectionMultiplexer.GetDatabase(Db), _subscription, _options.FetchTimeout);
+            return new RedisConnection(this, _redisClient, _subscription, _options.FetchTimeout);
         }
 
 #pragma warning disable 618
@@ -151,9 +131,7 @@ namespace Hangfire.Redis.StackExchange
                 using (var redisCnn = razorPage.Storage.GetConnection())
                 {
                     var db = (redisCnn as RedisConnection).Redis;
-                    var cnnMultiplexer = db.Multiplexer;
-                    var srv = cnnMultiplexer.GetServer(db.IdentifyEndpoint());
-                    var rawInfo = srv.InfoRaw().Split('\n')
+                    var rawInfo = db.Info().Split('\n')
                         .Where(x => x.Contains(':'))
                         .ToDictionary(x => x.Split(':')[0], x => x.Split(':')[1]);
 
@@ -174,14 +152,12 @@ namespace Hangfire.Redis.StackExchange
         {
             logger.Debug("Using the following options for Redis job storage:");
 
-            var connectionString = _redisOptions.ToString(includePassword: false);
-            logger.DebugFormat("ConnectionString: {0}\nDN: {1}", connectionString, Db);
+            logger.DebugFormat("ConnectionString: {0}", _redisClient);
         }
 
         public override string ToString()
         {
-            var connectionString = _redisOptions.ToString(includePassword: false);
-            return string.Format("redis://{0}/{1}", connectionString, Db);
+            return $"redis://{_redisClient}";
         }
 
         internal string GetRedisKey([NotNull] string key)

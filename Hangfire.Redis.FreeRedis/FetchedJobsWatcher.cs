@@ -1,4 +1,4 @@
-// Copyright © 2013-2015 Sergey Odinokov, Marco Casamento
+// Copyright ?2013-2015 Sergey Odinokov, Marco Casamento
 // This software is based on https://github.com/HangfireIO/Hangfire.Redis
 
 // Hangfire.Redis.StackExchange is free software: you can redistribute it and/or modify
@@ -19,7 +19,6 @@ using System.Threading;
 using Hangfire.Common;
 using Hangfire.Logging;
 using Hangfire.Server;
-using StackExchange.Redis;
 
 namespace Hangfire.Redis.StackExchange
 {
@@ -57,7 +56,7 @@ namespace Hangfire.Redis.StackExchange
         {
             using (var connection = (RedisConnection) _storage.GetConnection())
             {
-                var queues = connection.Redis.SetMembers(_storage.GetRedisKey("queues"));
+                var queues = connection.Redis.SMembers(_storage.GetRedisKey("queues"));
 
                 foreach (var queue in queues)
                 {
@@ -74,11 +73,11 @@ namespace Hangfire.Redis.StackExchange
             // jobs from the specified queue.
             Logger.DebugFormat("Acquiring the lock for the fetched list of the '{0}' queue...", queue);
 
-            using (RedisLock.Acquire(connection.Redis, _storage.GetRedisKey($"queue:{queue}:dequeued:lock"), _options.FetchedLockTimeout))
+            using (connection.Redis.Lock(_storage.GetRedisKey($"queue:{queue}:dequeued:lock"), (int)_options.FetchedLockTimeout.TotalSeconds))
             {
                 Logger.DebugFormat("Looking for timed out and aborted jobs in the '{0}' queue...", queue);
 
-                var jobIds = connection.Redis.ListRange(_storage.GetRedisKey($"queue:{queue}:dequeued"));
+                var jobIds = connection.Redis.LRange(_storage.GetRedisKey($"queue:{queue}:dequeued"), 0, -1);
 
                 var requeued = 0;
 
@@ -106,9 +105,9 @@ namespace Hangfire.Redis.StackExchange
 
         private bool RequeueJobIfTimedOutOrAborted(RedisConnection connection, string jobId, string queue)
         {
-            var flags = connection.Redis.HashGet(
+            var flags = connection.Redis.HMGet(
                 _storage.GetRedisKey($"job:{jobId}"),
-                new RedisValue[] {"Fetched", "Checked"});
+                new [] {"Fetched", "Checked"});
 
             var fetched = flags[0];
             var @checked = flags[1];
@@ -133,7 +132,7 @@ namespace Hangfire.Redis.StackExchange
                 // and after the CheckedTimeout expired, then the server
                 // is dead, and we'll re-queue the job.
 
-                connection.Redis.HashSet(
+                connection.Redis.HSet(
                     _storage.GetRedisKey($"job:{jobId}"),
                     "Checked",
                     JobHelper.SerializeDateTime(DateTime.UtcNow));
@@ -179,18 +178,18 @@ namespace Hangfire.Redis.StackExchange
         
         private bool BeingProcessedByADeadServer(RedisConnection connection, string jobId)
         {
-            var serverId = connection.Redis.HashGet(_storage.GetRedisKey($"job:{jobId}:state"), "ServerId");
-            if (serverId == RedisValue.Null)
+            var serverId = connection.Redis.HGet(_storage.GetRedisKey($"job:{jobId}:state"), "ServerId");
+            if (string.IsNullOrEmpty(serverId))
             {
                 // job is not fetched by a server
                 return false;
             }
-            var serverCheckedIn = connection.Redis.HashGet(_storage.GetRedisKey($"server:{serverId}"), "StartedAt");
+            var serverCheckedIn = connection.Redis.HGet(_storage.GetRedisKey($"server:{serverId}"), "StartedAt");
 
             // if the server has not been removed by ServerWatchdog due to heartbeat timeout,
             // there will be a value in this field, so the server is considered alive,
             // and thus the job shouldn't be requeued just yet.
-            return serverCheckedIn == RedisValue.Null;
+            return string.IsNullOrEmpty(serverCheckedIn);
         }
     }
 }

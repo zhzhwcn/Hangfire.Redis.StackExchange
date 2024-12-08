@@ -2,7 +2,7 @@
 using System.Threading;
 using Hangfire.Annotations;
 using Hangfire.Server;
-using StackExchange.Redis;
+using FreeRedis;
 
 namespace Hangfire.Redis.StackExchange
 {
@@ -12,17 +12,17 @@ namespace Hangfire.Redis.StackExchange
     {
         private readonly ManualResetEvent _mre = new ManualResetEvent(false);
         private readonly RedisStorage _storage;
-        private readonly ISubscriber _subscriber;
+        private readonly RedisClient _redisClient;
 
-        public RedisSubscription([NotNull] RedisStorage storage, [NotNull] ISubscriber subscriber)
+        public RedisSubscription([NotNull] RedisStorage storage, [NotNull] RedisClient redisClient)
         {
             _storage = storage ?? throw new ArgumentNullException(nameof(storage));
-            Channel = new RedisChannel(_storage.GetRedisKey("JobFetchChannel"), RedisChannel.PatternMode.Literal);
-            _subscriber = subscriber ?? throw new ArgumentNullException(nameof(subscriber));
+            Channel = _storage.GetRedisKey("JobFetchChannel");
+            _redisClient = redisClient ?? throw new ArgumentNullException(nameof(redisClient));
             
         }
 
-        public RedisChannel Channel { get; }
+        public string Channel { get; }
 
         public void WaitForJob(TimeSpan timeout, CancellationToken cancellationToken)
         {
@@ -32,12 +32,12 @@ namespace Hangfire.Redis.StackExchange
 
         void IServerComponent.Execute(CancellationToken cancellationToken)
         {
-            _subscriber.Subscribe(Channel, (channel, value) => _mre.Set());
+            _redisClient.Subscribe(Channel, (channel, value) => _mre.Set());
             cancellationToken.WaitHandle.WaitOne();
 
             if (cancellationToken.IsCancellationRequested)
             {
-                _subscriber.Unsubscribe(Channel);
+                _redisClient.UnSubscribe(Channel);
                 _mre.Reset();
             }
         }

@@ -18,7 +18,7 @@ namespace Hangfire.Redis.Tests
 
         public ExpiredJobsWatcherFacts()
         {
-            var options = new RedisStorageOptions() {Db = RedisUtils.GetDb()};
+            var options = new RedisStorageOptions() {};
             _storage = new RedisStorage(RedisUtils.GetHostAndPort(), options);
             _cts = new CancellationTokenSource();
             _cts.Cancel();
@@ -48,14 +48,17 @@ namespace Hangfire.Redis.Tests
         [Fact, CleanRedis]
         public void Execute_DeletesNonExistingJobs()
         {
-            var redis = RedisUtils.CreateClient();
+            var redis = RedisUtils.RedisClient;
 
-            Assert.Equal(0, redis.ListLength("{hangfire}:succeeded"));
-            Assert.Equal(0, redis.ListLength("{hangfire}:deleted"));
+            Assert.Equal(0, redis.LLen("{hangfire}:succeeded"));
+            Assert.Equal(0, redis.LLen("{hangfire}:deleted"));
 
             // Arrange
-            redis.ListRightPush("{hangfire}:succeded", "my-job");
-            redis.ListRightPush("{hangfire}:deleted", "other-job");
+            redis.RPush("{hangfire}:succeeded", "my-job");
+            redis.RPush("{hangfire}:deleted", "other-job");
+
+            Assert.Equal(1, redis.LLen("{hangfire}:succeeded"));
+            Assert.Equal(1, redis.LLen("{hangfire}:deleted"));
 
             var watcher = CreateWatcher();
 
@@ -63,21 +66,21 @@ namespace Hangfire.Redis.Tests
             watcher.Execute(_cts.Token);
 
             // Assert
-            Assert.Equal(0, redis.ListLength("{hangfire}:succeeded"));
-            Assert.Equal(0, redis.ListLength("{hangfire}:deleted"));
+            Assert.Equal(0, redis.LLen("{hangfire}:succeeded"));
+            Assert.Equal(0, redis.LLen("{hangfire}:deleted"));
         }
 
         [Fact, CleanRedis]
         public void Execute_DoesNotDeleteExistingJobs()
         {
-            var redis = RedisUtils.CreateClient();
+            var redis = RedisUtils.RedisClient;
             // Arrange
-            redis.ListRightPush("{hangfire}:succeeded", "my-job");
-            redis.HashSet("{hangfire}:job:my-job", "Fetched",
+            redis.RPush("{hangfire}:succeeded", "my-job");
+            redis.HSet("{hangfire}:job:my-job", "Fetched",
                 JobHelper.SerializeDateTime(DateTime.UtcNow.AddDays(-1)));
 
-            redis.ListRightPush("{hangfire}:deleted", "other-job");
-            redis.HashSet("{hangfire}:job:other-job", "Fetched",
+            redis.RPush("{hangfire}:deleted", "other-job");
+            redis.HSet("{hangfire}:job:other-job", "Fetched",
                 JobHelper.SerializeDateTime(DateTime.UtcNow.AddDays(-1)));
 
             var watcher = CreateWatcher();
@@ -86,8 +89,8 @@ namespace Hangfire.Redis.Tests
             watcher.Execute(_cts.Token);
 
             // Assert
-            Assert.Equal(1, redis.ListLength("{hangfire}:succeeded"));
-            Assert.Equal(1, redis.ListLength("{hangfire}:deleted"));
+            Assert.Equal(1, redis.LLen("{hangfire}:succeeded"));
+            Assert.Equal(1, redis.LLen("{hangfire}:deleted"));
         }
 
 #pragma warning disable 618

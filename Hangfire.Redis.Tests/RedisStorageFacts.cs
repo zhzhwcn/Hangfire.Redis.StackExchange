@@ -26,13 +26,6 @@ namespace Hangfire.Redis.Tests
         }
 
         [Fact]
-        public void DbFromConnectionStringIsUsed()
-        {
-            var storage = new RedisStorage(String.Format("{0},defaultDatabase=5", RedisUtils.GetHostAndPort()));
-            Assert.Equal(5, storage.Db);
-        }
-
-        [Fact]
         public void PasswordFromToStringIsNotShown()
         {
             string password = Guid.NewGuid().ToString("N");
@@ -67,7 +60,7 @@ namespace Hangfire.Redis.Tests
 
         private static RedisStorage CreateStorage()
         {
-            var options = new RedisStorageOptions() { Db = RedisUtils.GetDb() };
+            var options = new RedisStorageOptions() { };
             return new RedisStorage(RedisUtils.GetHostAndPort(), options);
         }
     }
